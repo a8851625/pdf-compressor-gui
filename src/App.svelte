@@ -233,7 +233,17 @@
       {isCompressing ? '压缩中...' : '开始压缩'}
     </button>
     {#if result?.outputPath}
-      <button on:click={() => openPath(result.outputPath)}>打开输出文件</button>
+      <button
+        on:click={async () => {
+          try {
+            await openPath(result.outputPath);
+          } catch (err) {
+            errorMessage = `无法打开输出文件：${typeof err === 'string' ? err : JSON.stringify(err)}`;
+          }
+        }}
+      >
+        打开输出文件
+      </button>
     {/if}
   </section>
 

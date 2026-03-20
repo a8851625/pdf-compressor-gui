@@ -195,11 +195,18 @@ fn resolve_ghostscript(app: &tauri::AppHandle) -> Result<GhostscriptRuntime, Str
     let mut attempted = Vec::new();
 
     for path in bundled_candidates {
-        attempted.push(path.display().to_string());
-        if is_usable_ghostscript(&path) {
+        let gs_lib = bundled_gs_lib_env(path.parent());
+        let attempt_label = if let Some(lib) = &gs_lib {
+            format!("{} (GS_LIB={lib})", path.display())
+        } else {
+            format!("{} (GS_LIB=unset)", path.display())
+        };
+        attempted.push(attempt_label);
+
+        if is_usable_ghostscript(&path, gs_lib.as_deref()) {
             return Ok(GhostscriptRuntime {
                 executable: path.to_string_lossy().to_string(),
-                gs_lib: bundled_gs_lib_env(path.parent()),
+                gs_lib,
             });
         }
     }
@@ -207,16 +214,11 @@ fn resolve_ghostscript(app: &tauri::AppHandle) -> Result<GhostscriptRuntime, Str
     let candidates = ["gs", "gswin64c", "gswin32c"];
     for name in candidates {
         attempted.push(name.to_string());
-        match Command::new(name).arg("-version").output() {
-            Ok(output) if output.status.success() => {
-                return Ok(GhostscriptRuntime {
-                    executable: name.to_string(),
-                    gs_lib: None,
-                })
-            }
-            Ok(_) => continue,
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(_) => continue,
+        if is_usable_ghostscript(Path::new(name), None) {
+            return Ok(GhostscriptRuntime {
+                executable: name.to_string(),
+                gs_lib: None,
+            });
         }
     }
 
@@ -349,6 +351,10 @@ fn bundled_gs_lib_env(bin_dir: Option<&Path>) -> Option<String> {
         };
 
     let mut paths = Vec::<StdPathBuf>::new();
+    let init = resource.join("Init");
+    if init.exists() {
+        paths.push(init);
+    }
     if lib.exists() {
         paths.push(lib);
     }
@@ -374,7 +380,7 @@ fn resolve_resource(app: &tauri::AppHandle, relative: &str) -> PathBuf {
         .unwrap_or_else(|_| PathBuf::from(relative))
 }
 
-fn is_usable_ghostscript(path: &Path) -> bool {
+fn is_usable_ghostscript(path: &Path, gs_lib: Option<&str>) -> bool {
     if !path.exists() {
         return false;
     }
@@ -389,7 +395,12 @@ fn is_usable_ghostscript(path: &Path) -> bool {
         }
     }
 
-    match Command::new(path).arg("-version").output() {
+    let mut command = Command::new(path);
+    if let Some(lib) = gs_lib {
+        command.env("GS_LIB", lib);
+    }
+
+    match command.args(["-q", "-dNODISPLAY", "-c", "quit"]).output() {
         Ok(output) => output.status.success(),
         Err(_) => false,
     }
