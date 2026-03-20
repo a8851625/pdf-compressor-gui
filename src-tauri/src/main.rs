@@ -18,7 +18,7 @@ struct GhostscriptRuntime {
     gs_lib: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct CompressRequest {
     input_path: String,
@@ -58,7 +58,13 @@ fn suggest_output_path(input_path: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-fn compress_pdf(app: tauri::AppHandle, req: CompressRequest) -> Result<CompressResult, String> {
+async fn compress_pdf(app: tauri::AppHandle, req: CompressRequest) -> Result<CompressResult, String> {
+    tauri::async_runtime::spawn_blocking(move || compress_pdf_inner(&app, req))
+        .await
+        .map_err(|e| format!("压缩任务执行失败: {e}"))?
+}
+
+fn compress_pdf_inner(app: &tauri::AppHandle, req: CompressRequest) -> Result<CompressResult, String> {
     let input = PathBuf::from(&req.input_path);
     let output = PathBuf::from(&req.output_path);
 

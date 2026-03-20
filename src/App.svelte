@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
   import { getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow';
   import { open as openDialog, save } from '@tauri-apps/plugin-dialog';
@@ -134,6 +134,10 @@
     startLoadingState();
     isCompressing = true;
     statusMessage = '压缩中，请稍候...';
+
+    // 先让 UI 有机会渲染 loading，再发起后端任务。
+    await tick();
+    await new Promise((resolve) => requestAnimationFrame(resolve));
 
     try {
       const res = await invoke('compress_pdf', {

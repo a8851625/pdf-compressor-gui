@@ -139,10 +139,20 @@ Rust 后端优先顺序：
 - macOS runner：通过 Homebrew 安装 Ghostscript 后打包
 - Windows runner：通过 Chocolatey 安装 Ghostscript 后打包
 - 生成各平台安装包并上传 artifacts
+- 若由 **tag（`v*.*.*`）** 触发，会自动创建 GitHub Release 并附加安装包
 
 触发方式：
-- `push` 到 `main`
+- `push tag`（如 `v0.1.0`）
 - `workflow_dispatch` 手动触发
+
+发布建议流程：
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+完成后在 GitHub Releases 页面可直接下载：`.dmg` / `.msi` / `.exe`。
 
 ---
 
@@ -163,6 +173,24 @@ Rust 后端优先顺序：
 
 可以，只要构建机能安装 Ghostscript（或设置到可发现路径）。
 CI 工作流已覆盖这一步。
+
+### 4) macOS 安装提示“已损坏，无法打开”怎么办？
+
+这是 macOS Gatekeeper 对**未签名/未公证**应用的常见拦截，不一定是文件真的损坏。
+
+临时解决（用户本机）：
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/PDF Compress GUI.app"
+```
+
+或者在 Finder 中：右键 App → 打开（确认后可放行）。
+
+若希望彻底消除该提示，正式发布需做：
+- Apple Developer ID 签名
+- Apple notarization（公证）
+
+> 当前 CI 产物默认是未签名测试包。
 
 ---
 
