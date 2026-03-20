@@ -1,0 +1,92 @@
+name: Build Desktop Packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Ghostscript (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install ghostscript
+
+      - name: Install Ghostscript (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install ghostscript --no-progress -y
+
+      - name: Resolve GS_WIN_DIR (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $basePaths = @($env:ProgramFiles, $env:'ProgramFiles(x86)') | Where-Object { $_ }
+          $resolved = $null
+          foreach ($base in $basePaths) {
+            $gsRoot = Join-Path $base 'gs'
+            if (-not (Test-Path $gsRoot)) { continue }
+
+            $candidates = Get-ChildItem $gsRoot -Directory |
+              Where-Object { $_.Name -match '^gs\d+' } |
+              Sort-Object Name -Descending
+
+            foreach ($candidate in $candidates) {
+              $exe = Join-Path $candidate.FullName 'bin\gswin64c.exe'
+              if (Test-Path $exe) {
+                $resolved = $candidate.FullName
+                break
+              }
+            }
+
+            if ($resolved) { break }
+          }
+
+          if (-not $resolved) {
+            throw 'Cannot resolve GS_WIN_DIR from Program Files.'
+          }
+
+          "GS_WIN_DIR=$resolved" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Resolved GS_WIN_DIR=$resolved"
+
+      - name: Build Tauri bundles
+        env:
+          GS_MAC_PATH: /opt/homebrew/bin/gs
+        run: npm run tauri:build
+
+      - name: Upload bundle artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundles-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/dmg/*.dmg
+            src-tauri/target/release/bundle/macos/*.app
+            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/release/bundle/nsis/*.exe
