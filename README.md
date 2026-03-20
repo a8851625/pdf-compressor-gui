@@ -3,6 +3,8 @@
 跨平台 PDF 压缩桌面应用（**Tauri + Svelte**），压缩核心为 **Ghostscript**，支持 macOS / Windows 打包。
 
 > 当前策略：**构建时内置 Ghostscript**（优先使用 app resources 内置 GS，找不到再回退系统 PATH）。
+>
+> 核心压缩逻辑参考：[`theeko74/pdfc`](https://github.com/theeko74/pdfc)
 
 ---
 
